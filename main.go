@@ -35,6 +35,10 @@ var (
 	AttrChecker  = regexp.MustCompile(`^[a-z0-9!-]+$`)
 )
 
+var (
+	refMap = make(map[string]*List)
+)
+
 type Entry struct {
 	Type  string
 	Value string
@@ -191,12 +195,12 @@ func Load(path string) (*List, error) {
 	return list, nil
 }
 
-func ParseList(list *List, ref map[string]*List) (*ParsedList, error) {
+func ParseList(refList *List) (*ParsedList, error) {
 	pl := &ParsedList{
-		Name:      list.Name,
+		Name:      refList.Name,
 		Inclusion: make(map[string]bool),
 	}
-	entryList := list.Entry
+	entryList := refList.Entry
 	for {
 		newEntryList := make([]Entry, 0, len(entryList))
 		hasInclude := false
@@ -207,7 +211,7 @@ func ParseList(list *List, ref map[string]*List) (*ParsedList, error) {
 					continue
 				}
 				pl.Inclusion[refName] = true
-				refList := ref[refName]
+				refList := refMap[refName]
 				if refList == nil {
 					return nil, fmt.Errorf("list not found: %s", entry.Value)
 				}
@@ -233,7 +237,6 @@ func main() {
 	dir := *dataPath
 	fmt.Println("Use domain lists in", dir)
 
-	ref := make(map[string]*List)
 	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
@@ -245,7 +248,7 @@ func main() {
 		if err != nil {
 			return err
 		}
-		ref[list.Name] = list
+		refMap[list.Name] = list
 		return nil
 	})
 	if err != nil {
@@ -263,8 +266,8 @@ func main() {
 
 	protoList := new(router.GeoSiteList)
 	var existList []string
-	for _, list := range ref {
-		pl, err := ParseList(list, ref)
+	for _, refList := range refMap {
+		pl, err := ParseList(refList)
 		if err != nil {
 			fmt.Println("Failed:", err)
 			os.Exit(1)
